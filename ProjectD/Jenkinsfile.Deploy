@@ -1,0 +1,39 @@
+pipeline{
+    agent any
+    environment{
+        container_name = 'hello_container'
+    }
+    stages{
+        stage("Build Image"){
+            steps{
+                sh """docker build -t sahilrajputwins/hla:${BUILD_ID} ."""
+            }
+        }
+        stage("Run Container"){
+            steps{
+                script{
+                    def ifExists=sh(script: 'docker ps -a --format "{{.Names}}" | findstr ${container_name}', returnStatus: true)
+                    if(ifExists==0){
+                        sh """docker stop ${container_name}"""
+                        sh """docker rm ${container_name}"""
+                    } else {
+                        echo 'no container found, running new one...'
+                    }       
+                    sh """docker run --name ${container_name} -p 80:80 -d sahilrajputwins/hla:${BUILD_ID}"""
+                }
+            }
+        }
+        stage("Login"){
+            steps{
+                withCredentials([usernamePassword(credentialsId: 'dockerhub-cred', usernameVariable: 'DOCKER_USERNAME', passwordVariable: 'DOCKER_PASSWORD')]){
+                    sh '''echo ${DOCKER_PASSWORD} | docker login -u ${DOCKER_USERNAME} --password-stdin'''
+                }
+            }
+        }
+        stage("Push Image"){
+            steps{
+                sh """docker push sahilrajputwins/hla:${BUILD_ID}"""
+            }
+        }
+    }
+}
